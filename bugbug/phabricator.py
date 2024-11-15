@@ -5,17 +5,20 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Collection, Iterator, NewType, Optional
+from typing import Collection, Iterator, NewType
 
+import requests
 import tenacity
 from libmozdata.phabricator import PhabricatorAPI
 from tqdm import tqdm
 
-from bugbug import db
+from bugbug import db, utils
 from bugbug.db import LastModifiedNotAvailable
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+utils.setup_libmozdata()
 
 RevisionDict = NewType("RevisionDict", dict)
 TransactionDict = NewType("TransactionDict", dict)
@@ -25,6 +28,13 @@ db.register(
     REVISIONS_DB,
     "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.data_revisions.latest/artifacts/public/revisions.json.zst",
     4,
+)
+
+FIXED_COMMENTS_DB = "data/fixed_comments.json"
+db.register(
+    FIXED_COMMENTS_DB,
+    "https://community-tc.services.mozilla.com/api/index/v1/task/project.bugbug.fixed_comments.latest/artifacts/public/fixed_comments.json.zst",
+    1,
 )
 
 PHABRICATOR_API = None
@@ -55,8 +65,8 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "transaction.search", objectIdentifier=rev_phid, limit=1000, after=after
@@ -69,8 +79,8 @@ def get_transactions(rev_phid: str) -> Collection[TransactionDict]:
 
 
 def get(
-    rev_ids: Optional[Collection[int]] = None, modified_start: Optional[datetime] = None
-) -> Collection[RevisionDict]:
+    rev_ids: Collection[int] | None = None, modified_start: datetime | None = None
+) -> list[RevisionDict]:
     assert PHABRICATOR_API is not None
 
     assert (rev_ids is not None) ^ (modified_start is not None)
@@ -87,8 +97,8 @@ def get(
 
     while after is not None:
         out = tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=256),
-            stop=tenacity.stop_after_attempt(7),
+            wait=tenacity.wait_exponential(multiplier=2, min=2),
+            stop=tenacity.stop_after_attempt(9),
         )(
             lambda PHABRICATOR_API=PHABRICATOR_API: PHABRICATOR_API.request(
                 "differential.revision.search",
@@ -159,7 +169,7 @@ def download_modified_revisions():
     db.append(REVISIONS_DB, modified_revisions)
 
 
-def get_testing_project(rev: RevisionDict) -> Optional[str]:
+def get_testing_project(rev: RevisionDict) -> str | None:
     testing_projects = [
         TESTING_PROJECTS[projectPHID]
         for projectPHID in rev["attachments"]["projects"]["projectPHIDs"]
@@ -177,7 +187,7 @@ def get_testing_project(rev: RevisionDict) -> Optional[str]:
 
 def get_review_dates(
     rev: RevisionDict,
-) -> tuple[Optional[datetime], list[datetime], list[datetime], list[datetime]]:
+) -> tuple[datetime | None, list[datetime], list[datetime], list[datetime]]:
     creation_date = None
     review_dates = []
 
@@ -208,7 +218,7 @@ def get_review_dates(
     return creation_date, review_dates, exclusion_start_dates, exclusion_end_dates
 
 
-def get_first_review_time(rev: RevisionDict) -> Optional[timedelta]:
+def get_first_review_time(rev: RevisionDict) -> timedelta | None:
     (
         creation_date,
         review_dates,
@@ -257,7 +267,7 @@ def get_first_review_time(rev: RevisionDict) -> Optional[timedelta]:
         )
 
 
-def get_pending_review_time(rev: RevisionDict) -> Optional[timedelta]:
+def get_pending_review_time(rev: RevisionDict) -> timedelta | None:
     if rev["fields"]["status"]["value"] != "needs-review":
         return None
 
@@ -284,3 +294,17 @@ def get_pending_review_time(rev: RevisionDict) -> Optional[timedelta]:
         return datetime.utcnow() - last_exclusion_end_date
     else:
         return datetime.utcnow() - creation_date
+
+
+def fetch_diff_from_url(
+    revision_id, first_patch, second_patch=None, single_patch=False
+):
+    if single_patch:
+        url = f"https://phabricator.services.mozilla.com/D{revision_id}?id={first_patch}&download=true"
+    else:
+        url = f"https://phabricator.services.mozilla.com/D{revision_id}?vs={first_patch}&id={second_patch}&download=true"
+
+    response = requests.get(url)
+    response.raise_for_status()
+
+    return response.text

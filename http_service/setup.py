@@ -5,7 +5,6 @@
 
 import os
 
-import pkg_resources
 from setuptools import find_packages, setup
 
 here = os.path.dirname(__file__)
@@ -18,8 +17,8 @@ def read_requirements(file_):
 
 install_requires = read_requirements("requirements.txt")
 
-# Use same version as bugbug
-version = pkg_resources.get_distribution("bugbug").version
+with open(os.path.join(here, "VERSION")) as f:
+    version = f.read().strip()
 
 setup(
     name="bugbug-http-service",

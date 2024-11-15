@@ -48,7 +48,6 @@ setup(
             "bugbug-data-test-scheduling-history = scripts.test_scheduling_history_retriever:main",
             "bugbug-data-revisions = scripts.revision_retriever:main",
             "bugbug-train = scripts.trainer:main",
-            "bugbug-train-similarity = scripts.similarity_trainer:main",
             "bugbug-check = scripts.check:main",
             "bugbug-maintenance-effectiveness-indicator = scripts.maintenance_effectiveness_indicator:main",
             "bugbug-microannotate-generate = scripts.microannotate_generator:main",
@@ -63,9 +62,11 @@ setup(
             "bugbug-generate-landings-risk-report = scripts.generate_landings_risk_report:main",
             "bugbug-shadow-scheduler-stats = scripts.shadow_scheduler_stats:main",
             "bugbug-data-github = scripts.github_issue_retriever:main",
+            "bugbug-fixed-comments = scripts.inline_comments_data_collection:main",
         ]
     },
     classifiers=[
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3 :: Only",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",

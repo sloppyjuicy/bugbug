@@ -22,6 +22,14 @@ ls -lh data
 # Removes it to ensure the commit retrieval work as expected
 rm data/commit*
 
+# Then generate a test dataset of fixed inline comments
+bugbug-fixed-comments --limit 150
+ls -lh
+ls -lh data
+
+# Remove DB to ensure it works as expected
+rm data/fixed_comments.json
+
 # Then retrieve a subset of commit data
 bugbug-data-commits --limit 500 "${CACHE_DIR:-cache}"
 test -d ${CACHE_DIR:-cache}/mozilla-central
@@ -38,6 +46,7 @@ bugbug-train backout --limit 30000 --no-download
 # Then spin the http service up
 # This part duplicates the http service Dockerfiles because we cannot easily spin Docker containers
 # up on Taskcluster
+cp VERSION http_service/VERSION
 pip install --disable-pip-version-check --quiet --no-cache-dir ./http_service
 
 export REDIS_URL=redis://localhost:6379/4
